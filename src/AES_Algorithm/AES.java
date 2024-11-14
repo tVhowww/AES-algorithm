@@ -50,7 +50,7 @@ public class AES {
 	// Hàm generateKey để tạo khóa con từ khóa key
 	private static byte[][] generateSubkeys(byte[] key) {
 		byte[][] keyMatrix = new byte[Nb * (Nr + 1)][4];
-		byte[] tmp = new byte[4];
+		byte[] tmp = new byte[Nk];
 		int index = 0;
 		// Tạo khóa ban đầu từ khóa key
 		for (int i = 0; i < Nk; i++) {
@@ -74,7 +74,7 @@ public class AES {
 				tmp[0] = (byte) (tmp[0] ^ (Rcon[i / Nk] & 0xff));
 			}
 			// XOR với subytes trước đó keyMatrix[i-Nk]
-			for (int j = 0; j < 4; j++) {
+			for (int j = 0; j < Nb; j++) {
 				keyMatrix[i][j] = (byte) (keyMatrix[i - Nk][j] ^ tmp[j]);
 			}
 		}
@@ -229,16 +229,16 @@ public class AES {
 	}
 
 	// Hàm mixColumn để thực hiện phép nhân ma trận với ma trận galois
-	private static byte[][] mixColumn(byte[][] s) {
-		byte[][] result = new byte[4][4];
+	private static byte[][] mixColumn(byte[][] state) {
+		byte[][] result = new byte[state.length][state[0].length];
 
-		for (int c = 0; c < 4; c++) {
+		for (int c = 0; c < Nb; c++) {
 			for (int i = 0; i < 4; i++) {
 				byte tmp = 0x00;
 				for (int j = 0; j < 4; j++) {
 					// Thực hiện phép nhân ma trận với ma trận galois và XOR các kết quả lại với
 					// nhau để tạo ra ma trận kết quả mixColumn
-					tmp ^= multiple(galois[i][j], s[j][c]);
+					tmp ^= multiple(galois[i][j], state[j][c]);
 				}
 				result[i][c] = tmp;
 			}
@@ -249,7 +249,7 @@ public class AES {
 
 	// Hàm invMixColumn để giải mã phép nhân ma trận với ma trận invgalois
 	private static byte[][] invMixColumn(byte[][] state) {
-		byte[][] result = new byte[4][4];
+		byte[][] result = new byte[state.length][state[0].length];
 		// Thực hiện phép nhân ma trận với ma trận invgalois
 		for (int c = 0; c < 4; c++) {
 			for (int i = 0; i < 4; i++) {
@@ -311,37 +311,37 @@ public class AES {
 		Nk = key.length / 4; // số cột trong khóa bằng độ dài khóa chia 4 ( ví dụ 128 bit = 16 byte = 4 cột)
 		Nr = Nk + 6; // số vòng lặp mã hóa sẽ bằng số cột trong khóa + 6
 
-		int lenght = 0;
+		int length = 0;
 		byte[] padding = new byte[1];
 		int i;
-		lenght = 16 - in.length % 16;
-		padding = new byte[lenght];
+		length = 16 - in.length % 16;
+		padding = new byte[length];
 		padding[0] = (byte) 0x80;
 
-		for (i = 1; i < lenght; i++)
+		for (i = 1; i < length; i++)
 			padding[i] = 0;
 
-		byte[] tmp = new byte[in.length + lenght];
-		byte[] bloc = new byte[16];
+		byte[] tmp = new byte[in.length + length];
+		byte[] block = new byte[16];
 
 		int count = 0; // khởi tạo biến count = 0
 		w = generateSubkeys(key); // tạo khóa con từ khóa key
 
-		for (i = 0; i < in.length + lenght; i++) {
+		for (i = 0; i < in.length + length; i++) {
 			if (i > 0 && i % 16 == 0) {
-				bloc = encryptBlock(bloc);
-				System.arraycopy(bloc, 0, tmp, i - 16, bloc.length);
+				block = encryptBlock(block);
+				System.arraycopy(block, 0, tmp, i - 16, block.length);
 			}
 			if (i < in.length)
-				bloc[i % 16] = in[i];
+				block[i % 16] = in[i];
 			else {
-				bloc[i % 16] = padding[count % 16];
+				block[i % 16] = padding[count % 16];
 				count++;
 			}
 		}
-		if (bloc.length == 16) {
-			bloc = encryptBlock(bloc);
-			System.arraycopy(bloc, 0, tmp, i - 16, bloc.length);
+		if (block.length == 16) {
+			block = encryptBlock(block);
+			System.arraycopy(block, 0, tmp, i - 16, block.length);
 		}
 
 		return tmp;
