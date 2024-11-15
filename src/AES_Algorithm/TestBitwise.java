@@ -50,7 +50,7 @@ public class TestBitwise {
 		byte b = 1;
 		String keyInput = "1234567800000000";
 		byte[] key = keyInput.getBytes();
-		byte[][] keyMatrix = new byte[44][4]; // 44-128, 52-192, 60-256 word để thực hiện tương ứng
+		byte[][] keyMatrix = new byte[52][4]; // 44-128, 52-192, 60-256 word để thực hiện tương ứng
 		byte[] tmp = new byte[4]; // 11-128, 13-192, 15-256 vòng mã hóa
 		int index = 0;
 
@@ -62,27 +62,41 @@ public class TestBitwise {
 			keyMatrix[i][3] = key[index++];
 		}
 		// key expansion từ khóa ban đầu
-		for (int i = 4; i < 6; i++) {
+		for (int i = 6; i < 52; i++) {
 			for (int j = 0; j < 4; j++) {
 				tmp[j] = keyMatrix[i - 1][j];
 			}
-			if (i % 4 == 0) {
+			if (i % 6 == 0) {
 				tmp = rotWord(tmp);
 				tmp = subWord(tmp);
-				tmp[0] = (byte) (tmp[0] ^ (Rcon[i / 4] & 0xff));
+				tmp[0] = (byte) (tmp[0] ^ (Rcon[i / 6] & 0xff));
 			}
 			for (int j = 0; j < 4; j++) {
-				keyMatrix[i][j] = (byte) (keyMatrix[i - 4][j] ^ tmp[j]);
+				keyMatrix[i][j] = (byte) (keyMatrix[i - 6][j] ^ tmp[j]);
 			}
 		}
-
-		for (int i = 0; i < 4; i++)
-			System.err.println(keyMatrix[5][i]);
+//
+//		for (int i = 0; i < 4; i++)
+//			System.err.println(keyMatrix[51][i]);
+//		
+//		System.out.println(52 ^ 53);
+//		System.out.println(54 ^ 54);
+//		System.out.println(55 ^ 55);
+//		System.out.println(48 ^ 56);
 		
-		System.out.println(52 ^ 53);
-		System.out.println(54 ^ 54);
-		System.out.println(55 ^ 55);
-		System.out.println(48 ^ 56);
+//		String hexNumber[] = { "8e", "73", "b0", "f7", "da", "0e", "64", "52", "c8", "10",
+//				"f3", "2b", "80", "90", "79", "e5", "62", "f8", "ea", "d2", "52", "2c", "6b", "7b"};
+//		8e 73 b0 f7 da 0e 64 52 c8 10 f3 2b // -114 115 -80 -9 -38 14 100 82 -56 16 -13 43 
+//		80 90 79 e5 62 f8 ea d2 52 2c 6b 7b // -128 -112 121 -27 98 -8 -22 -46 82 44 107 123 
+		// 43 126 21 22 40 174 210 166 171 247 21 136 9 207 79 60
+//		String hexNumber[] = { "01", "00", "22", "02"};
+//		int decimalNumber = 0;
+//		for (int i = 0; i < hexNumber.length; i++) {
+//			decimalNumber = Integer.parseInt(hexNumber[i], 16);
+//			System.out.print((byte)decimalNumber + " ");			
+//		}
+
+
 		
 	}
 }

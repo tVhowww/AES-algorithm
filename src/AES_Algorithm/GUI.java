@@ -138,7 +138,7 @@ public class GUI extends JFrame {
 	// Hàm gọi các sự kiện
 	public GUI() {
 		CreateGUI();
-		btnEncrypt.addActionListener(e -> xuLyMAHoa());
+		btnEncrypt.addActionListener(e -> xuLyMaHoa());
 		btnDecrypt.addActionListener(e -> xuLyGiaiMa());
 		btnReset.addActionListener(e -> xuLyReset());
 	}
@@ -151,47 +151,37 @@ public class GUI extends JFrame {
 		txtInputText.requestFocus();
 	}
 
-	// Hàm xử lý khi nhấn nút mã hóa
-	private void xuLyMAHoa() {
-		// Lấy văn bản rõ và khóa từ frame
+	// hàm xử lý khi nhấn nút mã hóa
+	private void xuLyMaHoa() {
+		// lấy văn bản rõ và khóa từ text field
 		String explainText = txtInputText.getText();
 		String k = new String(txtInputKey.getText());
-		System.out.println(k.length());
-		// Kiem tra khoa
+		// kiểm tra khoa
 		if (k.equals("")) {
 			JOptionPane.showMessageDialog(null, "Vui lòng nhập khóa!");
-		} else if (k.length() != 16) {
-			k = addKey(k);
-			System.out.println(k);
-			System.out.println(k.length());
-			// Mã hóa văn bản rõ
-			encrypt = AES.encrypt(explainText.getBytes(), k.getBytes());
-			String encryptedString = encode(encrypt);
-			// Cập nhật văn bản đã mã hóa
-			txtAEncypt.setText(encryptedString);
-
-		} else {
-			// Mã hóa văn bản rõ
-			encrypt = AES.encrypt(explainText.getBytes(), k.getBytes());
-			String encryptedString = encode(encrypt);
-			// Cập nhật văn bản đã mã hóa
-			txtAEncypt.setText(encryptedString);
-
+			return;
 		}
+		if (k.length() != 16) {
+			k = addKey(k);
+		}
+		encrypt = AES.encrypt(explainText.getBytes(), k.getBytes());
+		String encryptedString = encode(encrypt);
+		// cập nhật văn bản đã mã hóa
+		txtAEncypt.setText(encryptedString);
 
 	}
 
-	// Hàm xử lý khi nhấn nút giải mã
+	// hàm xử lý khi nhấn nút giải mã
 	private void xuLyGiaiMa() {
-		// Lấy văn bản đã mã hóa và khóa từ frame
+		// lấy văn bản đã mã hóa và khóa từ frame
 		String encryptedString = txtAEncypt.getText();
 		String k = new String(txtInputKey.getText());
 		k = addKey(k);
-		// Giải mã văn bản đã mã hóa
-		// Sử dụng Base64 để giải mã chuỗi đã mã hóa thành mảng byte để giải mã
+		// giải mã văn bản đã mã hóa
+		// sử dụng Base64 để giải mã chuỗi đã mã hóa thành mảng byte để giải mã
 		byte[] encryptedBytes = decode(encryptedString);
 		decrypt = AES.decrypt(encryptedBytes, k.getBytes());
-		// Cập nhật văn bản đã giải mã
+		// cập nhật văn bản đã giải mã
 		txtADecrypt.setText(String.valueOf(new String(decrypt, UTF8_CHARSET)));
 	}
 
@@ -199,19 +189,23 @@ public class GUI extends JFrame {
 		int length = key.length();
 		if (length < 16) {
 			for (int i = length; i < 16; i++) {
-				key += "0";
+				key += "\0";
 			}
 		} else if (length > 16 && length < 24) {
-			key = key.substring(0, 16);
+			for (int i = length; i < 24; i++) {
+				key += "\0";
+			}
 		} else if (length > 24 && length < 32) {
-			key = key.substring(0, 24);
+			for (int i = length; i < 32; i++) {
+				key += "\0";
+			}
 		} else if (length > 32) {
 			key = key.substring(0, 32);
 		}
 		return key;
 	}
 
-	// Hàm Base64 để mã hóa và giải mã dữ liệu văn bản sang mảng byte và ngược lại
+	// hàm Base64 để mã hóa và giải mã dữ liệu văn bản sang mảng byte và ngược lại
 	public static String encode(byte[] bytes) {
 		return Base64.getEncoder().encodeToString(bytes);
 	}

@@ -47,67 +47,32 @@ public class AES {
 	public static final byte[][] invgalois = { { 0x0e, 0x0b, 0x0d, 0x09 }, { 0x09, 0x0e, 0x0b, 0x0d },
 			{ 0x0d, 0x09, 0x0e, 0x0b }, { 0x0b, 0x0d, 0x09, 0x0e } };
 
-	// Hàm generateKey để tạo khóa con từ khóa key
-	private static byte[][] generateSubkeys(byte[] key) {
-		byte[][] keyMatrix = new byte[Nb * (Nr + 1)][4];
-		byte[] tmp = new byte[Nk];
-		int index = 0;
-		// Tạo khóa ban đầu từ khóa key
-		for (int i = 0; i < Nk; i++) {
-			keyMatrix[i][0] = key[index++];
-			keyMatrix[i][1] = key[index++];
-			keyMatrix[i][2] = key[index++];
-			keyMatrix[i][3] = key[index++];
-		}
-		// Key expansion từ khóa ban đầu
-		for (int i = Nk; i < Nb * (Nr + 1); i++) {
-			for (int j = 0; j < 4; j++) {
-				tmp[j] = keyMatrix[i - 1][j];
-			}
-			// Kiểm tra xem i có chia hết cho Nk không
-			if (i % Nk == 0) {
-				// Thực hiện gọi hàm rotWord ở trên
-				tmp = rotWord(tmp);
-				// Thực hiện gọi hàm subWord ở trên
-				tmp = subWord(tmp);
-				// Thực hiện XOR với Rcon[i/Nk]
-				tmp[0] = (byte) (tmp[0] ^ (Rcon[i / Nk] & 0xff));
-			}
-			// XOR với subytes trước đó keyMatrix[i-Nk]
-			for (int j = 0; j < Nb; j++) {
-				keyMatrix[i][j] = (byte) (keyMatrix[i - Nk][j] ^ tmp[j]);
-			}
-		}
-		// Trả về keyMatrix
-		return keyMatrix;
-
+	// hàm getSBoxValue để lấy giá trị từ bảng S-box
+	private static byte getSBoxValue(byte num) {
+		// trả về giá trị từ bảng S-box
+		// dùng & 0xff để đảm bảo num là unsigned byte - nằm trong khoảng 0..255
+		return (byte) sbox[num & 0xff];
 	}
 
-	// Hàm subWord để thay thế các byte trong một từ 4 byte bằng các giá trị tương
+	// hàm subWord để thay thế các byte trong một từ 4 byte bằng các giá trị tương
 	// ứng từ bảng S-box
 	private static byte[] subWord(byte[] input) {
 		// Tạo một mảng mới để lưu kết quả
-		byte[] output = new byte[input.length];
+		byte[] result = new byte[input.length];
 
-		for (int i = 0; i < output.length; i++) {
+		for (int i = 0; i < result.length; i++) {
 			// Lấy byte hiện tại
 			byte currentByte = input[i];
 
 			// Thay thế byte hiện tại bằng giá trị tương ứng từ bảng S-box
 			byte substitutedByte = getSBoxValue(currentByte);
 			// Lưu giá trị đã thay thế vào mảng kết quả
-			output[i] = substitutedByte;
+			result[i] = substitutedByte;
 		}
-		return output;
+		return result;
 	}
 
-	// Hàm getSBoxValue để lấy giá trị từ bảng S-box
-	private static byte getSBoxValue(byte num) {
-		// Trả về giá trị từ bảng S-box (dùng & 0xff để đảm bảo num là unsigned byte)
-		return (byte) sbox[num & 0xff];
-	}
-
-	// Hàm rotateWord để dịch trái 1 byte
+	// hàm rotateWord để dịch trái 1 byte
 	private static byte[] rotWord(byte[] input) {
 		byte[] tmp = new byte[input.length];
 		tmp[0] = input[1];
@@ -117,43 +82,84 @@ public class AES {
 		return tmp;
 	}
 
-	// Tạo vòng key (input 4 biến 32 bit)
-	private static byte[][] addRoundKey(byte[][] state, byte[][] subkeys, int round) {
+	// hàm keyExpansion để mở rộng khóa, tạo khóa con từ khóa key
+	private static byte[][] keyExpansion(byte[] key) {
+		byte[][] keyMatrix = new byte[Nb * (Nr + 1)][4];
+		byte[] tmp = new byte[4];
+		int index = 0;
+		// tạo khóa ban đầu từ khóa key
+		for (int i = 0; i < Nk; i++) {
+			keyMatrix[i][0] = key[index++];
+			keyMatrix[i][1] = key[index++];
+			keyMatrix[i][2] = key[index++];
+			keyMatrix[i][3] = key[index++];
+		}
+		// key expansion từ khóa ban đầu
+		for (int i = Nk; i < Nb * (Nr + 1); i++) {
+			for (int j = 0; j < 4; j++) {
+				tmp[j] = keyMatrix[i - 1][j];
+			}
+			// kiểm tra xem i có là bội của cho Nk không
+			if (i % Nk == 0) {
+				// thực hiện gọi hàm rotWord
+				tmp = rotWord(tmp);
+				// thực hiện gọi hàm subWord
+				tmp = subWord(tmp);
+				// thực hiện XOR với Rcon[i/Nk]
+				tmp[0] = (byte) (tmp[0] ^ (Rcon[i / Nk] & 0xff));
+			}
+			// XOR với subytes trước đó keyMatrix[i-Nk]
+			for (int j = 0; j < 4; j++) {
+				keyMatrix[i][j] = (byte) (keyMatrix[i - Nk][j] ^ tmp[j]);
+			}
+		}
+		// trả về keyMatrix
+		return keyMatrix;
 
+	}
+
+	// tạo vòng key (input 4 biến 32 bit)
+	private static byte[][] AddRoundKeys(byte[][] state, byte[][] subkeys, int round) {
+		// state là mảng sau khi thực hiện MixColumns
 		// subkeys là mảng chứa các khóa con
-		// state là mảng sau khi thực hiện mixColumn
 		// round là số vòng phải thực hiện
-		byte[][] tmp = new byte[state.length][state[0].length]; // tạo mảng tmp có kích thước bằng state
+		byte[][] tmp = new byte[state.length][state[0].length];
 
-		// Duyệt qua từng cột của state
-		for (int c = 0; c < Nb; c++) {
-			// Duyệt qua từng hàng của state
-			for (int r = 0; r < 4; r++)
+		// duyệt qua từng cột của state
+		for (int col = 0; col < Nb; col++) {
+			// duyệt qua từng hàng của state
+			for (int row = 0; row < 4; row++)
 				// XOR từng byte trong state với từng byte trong khóa con
-				tmp[r][c] = (byte) (state[r][c] ^ subkeys[round * Nb + c][r]);
+				tmp[row][col] = (byte) (state[row][col] ^ subkeys[round * Nb + col][row]);
 		}
 
 		return tmp;
 	}
 
-	// Hàm subByte để thay thế các byte trong state bằng các giá trị tương ứng từ
-	// bảng sbox
-	private static byte[][] subByte(byte[][] state) {
-		byte[][] result = new byte[state.length][state[0].length];
+	// hàm SubBytes để thay thế các byte trong state bằng các giá trị
+	// tương ứng từ bảng S-Box
+	private static byte[][] SubBytes(byte[][] state) {
+		byte[][] newState = new byte[4][4];
 
-		for (int row = 0; row < state.length; row++) {
-			for (int col = 0; col < state[0].length; col++) {
-				// Thay thế các byte trong state bằng các giá trị tương ứng từ bảng sbox
-				result[row][col] = getSBoxValue(state[row][col]);
+		for (int row = 0; row < 4; row++) {
+			for (int col = 0; col < Nb; col++) {
+				// thay thế các byte trong state bằng các giá trị tương ứng từ bảng sbox
+				newState[row][col] = getSBoxValue(state[row][col]);
 			}
 		}
 
-		return result;
+		return newState;
 	}
 
-	// Hàm invSubByte để thay thế các byte trong state bằng các giá trị tương ứng
+	// hàm getInvSubBytes để lấy giá trị từ bảng inv_sbox
+	private static byte getInvSBoxValue(byte num) {
+		// trả về giá trị từ bảng sbox
+		return (byte) inv_sbox[num & 0xFF];
+	}
+
+	// hàm InvSubBytes để thay thế các byte trong state bằng các giá trị tương ứng
 	// từ bảng inv_sbox
-	private static byte[][] invSubByte(byte[][] state) {
+	private static byte[][] InvSubBytes(byte[][] state) {
 		for (int row = 0; row < 4; row++)
 			for (int col = 0; col < Nb; col++)
 				// Thay thế các byte trong state bằng các giá trị tương ứng từ bảng inv_sbox
@@ -161,27 +167,18 @@ public class AES {
 		return state;
 	}
 
-	// hàm getinvSubByte để lấy giá trị từ bảng inv_sbox
-	private static byte getInvSBoxValue(byte value) {
-		// Lấy chỉ mục trong bảng sbox
-		int index = value & 0xFF; // Đảm bảo value là dạng unsigned byte
-
-		// Trả về giá trị từ bảng sbox
-		return (byte) inv_sbox[index];
-	}
-
-	// shiftRow
-	private static byte[][] shiftRow(byte[][] state) {
+	// hàm ShiftRows
+	private static byte[][] ShiftRows(byte[][] state) {
 		byte tmp;
 
-		// Row 1: Shift left by 1 byte
+		// dòng 1: dịch trái 1 byte
 		tmp = state[1][0];
 		state[1][0] = state[1][1];
 		state[1][1] = state[1][2];
 		state[1][2] = state[1][3];
 		state[1][3] = tmp;
 
-		// Row 2: Shift left by 2 bytes
+		// dòng 2: dịch trái 2 bytes
 		tmp = state[2][0];
 		state[2][0] = state[2][2];
 		state[2][2] = tmp;
@@ -189,7 +186,7 @@ public class AES {
 		state[2][1] = state[2][3];
 		state[2][3] = tmp;
 
-		// Row 3: Shift left by 3 bytes
+		// dòng 3: dịch trái 3 bytes
 		tmp = state[3][0];
 		state[3][0] = state[3][3];
 		state[3][3] = state[3][2];
@@ -199,18 +196,18 @@ public class AES {
 		return state;
 	}
 
-	// invShiftRow
-	private static byte[][] invShiftRow(byte[][] state) {
+	// hàm InvShiftRows
+	private static byte[][] InvShiftRows(byte[][] state) {
 		byte tmp;
 
-		// Row 1: Shift right by 1 byte
+		// dòng 1: dịch phải 1 byte
 		tmp = state[1][3];
 		state[1][3] = state[1][2];
 		state[1][2] = state[1][1];
 		state[1][1] = state[1][0];
 		state[1][0] = tmp;
 
-		// Row 2: Shift right by 2 bytes
+		// dòng 2: dịch phải 2 bytes
 		tmp = state[2][0];
 		state[2][0] = state[2][2];
 		state[2][2] = tmp;
@@ -218,7 +215,7 @@ public class AES {
 		state[2][1] = state[2][3];
 		state[2][3] = tmp;
 
-		// Row 3: Shift right by 3 bytes
+		// dòng 3: dịch phải 3 bytes
 		tmp = state[3][0];
 		state[3][0] = state[3][1];
 		state[3][1] = state[3][2];
@@ -228,198 +225,7 @@ public class AES {
 		return state;
 	}
 
-	// Hàm mixColumn để thực hiện phép nhân ma trận với ma trận galois
-	private static byte[][] mixColumn(byte[][] state) {
-		byte[][] result = new byte[state.length][state[0].length];
-
-		for (int c = 0; c < Nb; c++) {
-			for (int i = 0; i < 4; i++) {
-				byte tmp = 0x00;
-				for (int j = 0; j < 4; j++) {
-					// Thực hiện phép nhân ma trận với ma trận galois và XOR các kết quả lại với
-					// nhau để tạo ra ma trận kết quả mixColumn
-					tmp ^= multiple(galois[i][j], state[j][c]);
-				}
-				result[i][c] = tmp;
-			}
-		}
-
-		return result;
-	}
-
-	// Hàm invMixColumn để giải mã phép nhân ma trận với ma trận invgalois
-	private static byte[][] invMixColumn(byte[][] state) {
-		byte[][] result = new byte[state.length][state[0].length];
-		// Thực hiện phép nhân ma trận với ma trận invgalois
-		for (int c = 0; c < 4; c++) {
-			for (int i = 0; i < 4; i++) {
-				byte sp = 0x00;
-				for (int j = 0; j < 4; j++) {
-					// Thực hiện phép nhân ma trận với ma trận invgalois và XOR các kết quả lại với
-					// nhau để tạo ra ma trận kết quả invMixColumn
-					sp ^= multiple(invgalois[i][j], state[j][c]);
-				}
-				result[i][c] = sp;
-			}
-		}
-
-		return result;
-	}
-
-	// Hàm encryptBlock để mã hóa một khối dữ liệu 128 bit
-	public static byte[] encryptBlock(byte[] input) {
-
-		// Khởi tạo mảng tạm thời để lưu kết quả
-		byte[] tmp = new byte[input.length];
-
-		// Chuyển đổi mảng byte đầu vào thành ma trận state
-		byte[][] state = new byte[4][Nb];
-		for (int i = 0; i < input.length; i++) {
-			state[i % 4][i / 4] = input[i]; // state [i%4] là trí trị cột, [i/4] là trị trị hàng
-		}
-
-		// Thực hiện phép XOR giữa state và subkeys đầu tiên
-		state = addRoundKey(state, w, 0);
-
-		// Thực hiện các vòng lặp mã hóa
-		for (int round = 1; round < Nr; round++) {
-//			System.out.println(round);
-			state = subByte(state);
-			state = shiftRow(state);
-			state = mixColumn(state);
-			state = addRoundKey(state, w, round);
-		}
-
-		// Thực hiện vòng lặp cuối cùng của mã hóa
-		state = subByte(state);
-		state = shiftRow(state);
-		state = addRoundKey(state, w, Nr);
-
-		// Chuyển đổi ma trận state thành mảng byte kết quả
-		for (int i = 0; i < tmp.length; i++) {
-			tmp[i] = state[i % 4][i / 4]; // tmp[i] là giá trị của mảng byte kết quả tương ứng với state[i%4] là cột và
-											// [i/4] là hàng
-		}
-
-		return tmp;
-	}
-
-	// Hàm Encrypt để mã hóa dữ liệu
-	public static byte[] encrypt(byte[] in, byte[] key) {
-//		System.out.println(key.length);
-		Nb = 4; // số cột trong khối dữ liệu
-		Nk = key.length / 4; // số cột trong khóa bằng độ dài khóa chia 4 ( ví dụ 128 bit = 16 byte = 4 cột)
-		Nr = Nk + 6; // số vòng lặp mã hóa sẽ bằng số cột trong khóa + 6
-
-		int length = 0;
-		byte[] padding = new byte[1];
-		int i;
-		length = 16 - in.length % 16;
-		padding = new byte[length];
-		padding[0] = (byte) 0x80;
-
-		for (i = 1; i < length; i++)
-			padding[i] = 0;
-
-		byte[] tmp = new byte[in.length + length];
-		byte[] block = new byte[16];
-
-		int count = 0; // khởi tạo biến count = 0
-		w = generateSubkeys(key); // tạo khóa con từ khóa key
-
-		for (i = 0; i < in.length + length; i++) {
-			if (i > 0 && i % 16 == 0) {
-				block = encryptBlock(block);
-				System.arraycopy(block, 0, tmp, i - 16, block.length);
-			}
-			if (i < in.length)
-				block[i % 16] = in[i];
-			else {
-				block[i % 16] = padding[count % 16];
-				count++;
-			}
-		}
-		if (block.length == 16) {
-			block = encryptBlock(block);
-			System.arraycopy(block, 0, tmp, i - 16, block.length);
-		}
-
-		return tmp;
-	}
-
-	// Hàm decryptBlock để giải mã một khối dữ liệu 128 bit
-	public static byte[] decryptBlock(byte[] in) {
-		byte[] tmp = new byte[in.length];
-
-		byte[][] state = new byte[4][Nb];
-
-		for (int i = 0; i < in.length; i++)
-			state[i / 4][i % 4] = in[i % 4 * 4 + i / 4];
-
-		state = addRoundKey(state, w, Nr);
-		for (int round = Nr - 1; round >= 1; round--) {
-			state = invSubByte(state);
-			state = invShiftRow(state);
-			state = addRoundKey(state, w, round);
-			state = invMixColumn(state);
-		}
-		state = invSubByte(state);
-		state = invShiftRow(state);
-		state = addRoundKey(state, w, 0);
-
-		for (int i = 0; i < tmp.length; i++)
-			tmp[i % 4 * 4 + i / 4] = state[i / 4][i % 4];
-
-		return tmp;
-	}
-
-	// Hàm decrypt để giải mã dữ liệu
-	public static byte[] decrypt(byte[] in, byte[] key) {
-		int i;
-		byte[] tmp = new byte[in.length];
-		byte[] block = new byte[16];
-
-		Nb = 4;
-		Nk = key.length / 4;
-		Nr = Nk + 6;
-		w = generateSubkeys(key);
-
-		for (i = 0; i < in.length; i++) {
-			if (i > 0 && i % 16 == 0) {
-				block = decryptBlock(block);
-				System.arraycopy(block, 0, tmp, i - 16, block.length);
-			}
-			if (i < in.length)
-				block[i % 16] = in[i];
-		}
-		block = decryptBlock(block);
-		System.arraycopy(block, 0, tmp, i - 16, block.length);
-
-		tmp = dltPadding(tmp);
-
-		return tmp;
-	}
-
-	// Hàm xóa padding, padding là các byte 0 được thêm vào cuối chuỗi, dùng để đảm
-	// bảo độ dài của chuỗi là bội của 16 byte (block)
-	private static byte[] dltPadding(byte[] input) {
-		// Đếm số lượng byte padding có giá trị 0
-		int paddingCount = 0;
-		// Duyệt từ cuối mảng byte đầu vào
-		int index = input.length - 1;
-		// Kiểm tra các byte từ cuối mảng input ngược về phía trước
-		while (input[index] == 0) {
-			paddingCount++;
-			index--;
-		}
-
-		byte[] result = new byte[input.length - paddingCount - 1];
-		// Sao chép các phần tử từ mảng input vào mảng result, bỏ qua các byte padding
-		System.arraycopy(input, 0, result, 0, result.length);
-		return result;
-	}
-
-	// Hàm nhân 2 số trong trường hữu hạn GF(2^8), giá trị trả về là một byte
+	// hàm nhân 2 số trong trường hữu hạn GF(2^8), giá trị trả về là một byte
 	public static byte multiple(byte a, byte b) {
 		byte result = 0;
 		for (int i = 0; i < 8; i++) {
@@ -445,102 +251,199 @@ public class AES {
 		return result;
 	}
 
-//
-//	public static void main(String[] args) {
-//
-//		// Test delete padding
-////		byte[] input = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-////				0x00 };
-////		byte[] result = dltPadding(input);
-////		System.out.print("Test delete padding: ");
-////		for (int i = 0; i < result.length; i++) {
-////			System.out.print(Integer.toHexString(result[i] & 0xff) + " ");
-////		}
-////		System.out.println();
-//
-////		// Test multiple
-////		byte a = (byte) 0x57; // (01010111)
-////		byte b = (byte) 0x83; // (10000011)
-////		System.out.println("a = " + Integer.toHexString(a & 0xff));
-////		System.out.println("b = " + Integer.toHexString(b & 0xff));
-////		byte result = multiple(a, b);
-////		System.out.print("Test multiple: ");
-//////		System.out.println(" =  " + Integer.toHexString(result & 0xff));
-////		System.out.println(String.format("%02X", result));
-//
-//		// Test mixColumn
-//		byte[][] state = new byte[4][4];
-//
-//		// ========================================Test shiftRow
-////		byte[][] state = new byte[4][4];
-//
-//		// data test mixColumn
-//		state[0][0] = (byte) 0x87;
-//		state[0][1] = (byte) 0xF2;
-//		state[0][2] = 0x4D;
-//		state[0][3] = (byte) 0x97;
-//		state[1][0] = 0x6E;
-//		state[1][1] = 0x4C;
-//		state[1][2] = (byte) 0x90;
-//		state[1][3] = (byte) 0xEC;
-//		state[2][0] = 0x46;
-//		state[2][1] = (byte) 0xE7;
-//		state[2][2] = 0x4A;
-//		state[2][3] = (byte) 0xC3;
-//		state[3][0] = (byte) 0xA6;
-//		state[3][1] = (byte) 0x8C;
-//		state[3][2] = (byte) 0xD8;
-//		state[3][3] = (byte) 0x95;
-//
-//		System.out.println("Truoc khi mixColumn");
-//		for (int i = 0; i < 4; i++) {
-//			for (int j = 0; j < 4; j++) {
-//				System.out.print(Integer.toHexString(state[i][j] & 0xff) + " ");
-//			}
-//			System.out.println();
-//		}
-//		System.out.println("Sau khi mixColumn");
-//		state = mixColumn(state);
-//		for (int i = 0; i < 4; i++) {
-//			for (int j = 0; j < 4; j++) {
-//				System.out.print(Integer.toHexString(state[i][j] & 0xff) + " ");
-//			}
-//			System.out.println();
-//		}
-//
-////		System.out.println("Truoc khi invShiftRow");
-////		for (int i = 0; i < 4; i++) {
-////			for (int j = 0; j < 4; j++) {
-////				System.out.print(Integer.toHexString(state[i][j] & 0xff) + " ");
-////			}
-////			System.out.println();
-////		}
-////		System.out.println("Sau khi invShiftRow");
-////		state = invShiftRow(state);
-////		for (int i = 0; i < 4; i++) {
-////			for (int j = 0; j < 4; j++) {
-////				System.out.print(Integer.toHexString(state[i][j] & 0xff) + " ");
-////			}
-////			System.out.println();
-////		}
-//
-////		// ========================================Test roteteWord
-////		byte[] input = new byte[4];
-////		input[0] = 0x02;
-////		input[1] = 0x05;
-////		input[2] = 0x04;
-////		input[3] = 0x08;
-////		System.out.println("Truoc khi rotateWord");
-////		for(int i = 0; i< 4; i++) {
-////			System.out.print(Integer.toHexString(input[i] & 0xff)+ " ");
-////		}
-////		
-////		System.out.println();
-////		System.out.println("Sau khi rotateWord");
-////		input = rotateWord(input); // gọi hàm rotetaWord cho input nhập vào
-////		for(int i = 0; i< 4; i++) {
-////			System.out.print(Integer.toHexString(input[i] & 0xff)+  " ");
-////		}
-////			
-//	}
+	// hàm MixColumns để thực hiện phép nhân ma trận với ma trận galois
+	private static byte[][] MixColumns(byte[][] state) {
+		byte[][] newState = new byte[4][4];
+
+		for (int c = 0; c < 4; c++) {
+			for (int i = 0; i < 4; i++) {
+				byte tmp = 0x00;
+				for (int j = 0; j < 4; j++) {
+					// thực hiện phép nhân ma trận với ma trận galois và XOR các kết quả lại với
+					// nhau để tạo ra ma trận kết quả MixColumns
+					tmp ^= multiple(galois[i][j], state[j][c]);
+				}
+				newState[i][c] = tmp;
+			}
+		}
+
+		return newState;
+	}
+
+	// hàm InvMixColumnss để giải mã phép nhân ma trận với ma trận invgalois
+	private static byte[][] InvMixColumnss(byte[][] state) {
+		byte[][] newState = new byte[4][4];
+		// thực hiện phép nhân ma trận với ma trận invgalois
+		for (int c = 0; c < 4; c++) {
+			for (int i = 0; i < 4; i++) {
+				byte tmp = 0x00;
+				for (int j = 0; j < 4; j++) {
+					// thực hiện phép nhân ma trận với ma trận invgalois và XOR các kết quả lại với
+					// nhau để tạo ra ma trận kết quả InvMixColumnss
+					tmp ^= multiple(invgalois[i][j], state[j][c]);
+				}
+				newState[i][c] = tmp;
+			}
+		}
+
+		return newState;
+	}
+
+	// hàm encryptBlock để mã hóa một khối dữ liệu 128 bit
+	public static byte[] encryptBlock(byte[] input) {
+
+		// khởi tạo mảng tạm thời để lưu kết quả
+		byte[] tmp = new byte[input.length];
+
+		// chuyển đổi mảng byte đầu vào thành ma trận state
+		byte[][] state = new byte[4][Nb];
+		for (int i = 0; i < input.length; i++) {
+			state[i % 4][i / 4] = input[i]; // state [i%4] là chỉ mục cột, [i/4] là chỉ mục hàng
+		}
+
+		// thực hiện phép XOR giữa state và subkeys đầu tiên
+		state = AddRoundKeys(state, w, 0);
+
+		// thực hiện các vòng lặp mã hóa
+		for (int round = 1; round < Nr; round++) {
+			state = SubBytes(state);
+			state = ShiftRows(state);
+			state = MixColumns(state);
+			state = AddRoundKeys(state, w, round);
+		}
+
+		// thực hiện vòng lặp cuối cùng của mã hóa
+		state = SubBytes(state);
+		state = ShiftRows(state);
+		state = AddRoundKeys(state, w, Nr);
+
+		// chuyển đổi ma trận state thành mảng byte kết quả
+		for (int i = 0; i < tmp.length; i++) {
+			tmp[i] = state[i % 4][i / 4]; // tmp[i] là giá trị của mảng byte kết quả tương ứng với state[i%4] là cột và
+											// [i/4] là hàng
+		}
+		return tmp;
+	}
+
+	// hàm encrypt để mã hóa dữ liệu
+	public static byte[] encrypt(byte[] in, byte[] key) {
+		Nb = 4; // số cột trong khối dữ liệu state
+		Nk = key.length / 4; // số cột trong khóa bằng độ dài khóa chia 4 (128 bit: 4 bytes,..)
+		Nr = Nk + 6; // số vòng lặp mã hóa sẽ bằng số cột trong khóa + 6
+
+		int length = 0;
+		byte[] padding;
+		int i;
+
+		// tính toán số byte cần padding để mảng dữ liệu có chiều dài bội số của 16
+		length = 16 - in.length % 16;
+		padding = new byte[length];
+
+		// thêm padding theo cơ chế PKCS7
+		for (i = 0; i < length; i++) {
+			padding[i] = (byte) length;
+		}
+
+		byte[] tmp = new byte[in.length + length];
+		byte[] block = new byte[16];
+
+		int count = 0;
+		w = keyExpansion(key); // tạo khóa con từ khóa key
+
+		// Duyệt qua dữ liệu đầu vào và thực hiện mã hóa khối
+		for (i = 0; i < in.length + length; i++) {
+			if (i > 0 && i % 16 == 0) { // khi đủ 16 byte, thực hiện mã hóa
+				block = encryptBlock(block);
+				System.arraycopy(block, 0, tmp, i - 16, block.length);
+			}
+			if (i < in.length)
+				block[i % 16] = in[i]; // cập nhật block với dữ liệu đầu vào
+			else {
+				block[i % 16] = padding[count % 16]; // thêm padding vào block
+				count++;
+			}
+		}
+
+		// mã hóa khối cuối cùng nếu đủ 16 byte
+		if (block.length == 16) {
+			block = encryptBlock(block);
+			System.arraycopy(block, 0, tmp, i - 16, block.length);
+		}
+
+		return tmp;
+	}
+
+	// hàm decryptBlock để giải mã một khối dữ liệu 128 bit
+	public static byte[] decryptBlock(byte[] in) {
+		byte[] tmp = new byte[in.length];
+
+		byte[][] state = new byte[4][Nb];
+
+		for (int i = 0; i < in.length; i++)
+			state[i / 4][i % 4] = in[i % 4 * 4 + i / 4];
+
+		state = AddRoundKeys(state, w, Nr);
+		for (int round = Nr - 1; round >= 1; round--) {
+			state = InvSubBytes(state);
+			state = InvShiftRows(state);
+			state = AddRoundKeys(state, w, round);
+			state = InvMixColumnss(state);
+		}
+		state = InvSubBytes(state);
+		state = InvShiftRows(state);
+		state = AddRoundKeys(state, w, 0);
+
+		for (int i = 0; i < tmp.length; i++)
+			tmp[i % 4 * 4 + i / 4] = state[i / 4][i % 4];
+
+		return tmp;
+	}
+
+	// hàm decrypt để giải mã dữ liệu
+	public static byte[] decrypt(byte[] in, byte[] key) {
+		int i;
+		byte[] tmp = new byte[in.length];
+		byte[] block = new byte[16];
+
+		Nb = 4;
+		Nk = key.length / 4;
+		Nr = Nk + 6;
+		w = keyExpansion(key);
+
+		for (i = 0; i < in.length; i++) {
+			if (i > 0 && i % 16 == 0) {
+				block = decryptBlock(block);
+				System.arraycopy(block, 0, tmp, i - 16, block.length);
+			}
+			if (i < in.length)
+				block[i % 16] = in[i];
+		}
+		block = decryptBlock(block);
+		System.arraycopy(block, 0, tmp, i - 16, block.length);
+
+		// gọi hàm xóa padding
+		tmp = dltPadding(tmp);
+
+		return tmp;
+	}
+
+	// hàm xóa padding, padding là các byte bằng độ dài còn thiếu được thêm vào cuối
+	// chuỗi (PKCS7)
+	// dùng để đảm bảo độ dài của chuỗi là bội của 16 byte (block)
+	private static byte[] dltPadding(byte[] input) {
+		// Lấy giá trị của byte cuối cùng, đó chính là số byte padding
+		int paddingCount = input[input.length - 1];
+
+		// kiểm tra nếu paddingCount hợp lệ (nằm trong khoảng từ 1 đến 16, phù hợp với
+		// PKCS7)
+		if (paddingCount < 1 || paddingCount > 16) {
+			throw new IllegalArgumentException("Độ dài padding không hợp lệ");
+		}
+
+		// tạo mảng kết quả, sao chép dữ liệu mà không có padding
+		byte[] result = new byte[input.length - paddingCount];
+		System.arraycopy(input, 0, result, 0, result.length);
+
+		return result;
+	}
 }
