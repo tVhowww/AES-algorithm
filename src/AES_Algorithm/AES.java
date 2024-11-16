@@ -106,6 +106,11 @@ public class AES {
 				// thực hiện XOR với Rcon[i/Nk]
 				// AddRcon
 				tmp[0] = (byte) (tmp[0] ^ (Rcon[i / Nk] & 0xff));
+			} 
+			// nếu Nk > 6 (Nk = 8) và i - 4 là bội số của Nk (Figure 11)
+			// thực hiện subWord trước khi XOR
+			else if (Nk > 6 && i % Nk == 4) {
+				tmp = subWord(tmp);
 			}
 			// XOR với subytes trước đó keyMatrix[i-Nk]
 			// AddW
@@ -141,10 +146,10 @@ public class AES {
 	private static byte[][] SubBytes(byte[][] state) {
 		byte[][] newState = new byte[4][4];
 
-		for (int row = 0; row < 4; row++) {
-			for (int col = 0; col < Nb; col++) {
+		for (int col = 0; col < 4; col++) {
+			for (int row = 0; row < Nb; row++) {
 				// thay thế các byte trong state bằng các giá trị tương ứng từ bảng S-Box
-				newState[row][col] = getSBoxValue(state[row][col]);
+				newState[col][row] = getSBoxValue(state[col][row]);
 			}
 		}
 
@@ -233,15 +238,17 @@ public class AES {
 			if ((b & 1) == 1) {
 				result ^= a;
 			}
-			// kiểm tra xem bit cao nhất của a trước khi dịch trái
+			// kiểm tra xem bit cao nhất của a trước khi dịch trái,
+			// nghĩa là kết quả sẽ vượt quá bậc 8 và cần được giảm bậc
 			// 0x80 : 10000000
 			boolean highBitSet = (a & 0x80) != 0;
-			// Dịch trái a một bit
+			// Dịch trái a một bit, tương đương với nhân đa thức với x
 			a <<= 1;
 			// Nếu bit cao nhất của a trước khi dịch trái là 1
 			if (highBitSet) {
 				// Thực hiện phép XOR với 0x1b
-				// 0x1b : 00011011, đây là biểu diễn nhị phân của đa thức bất khả quy x^8 + x^4 + x^3 + x + 1
+				// tương tự phép chia dư với đa thức m(x) = x^8 + x^4 + x^3 + x + 1
+				// 0x1b : 00011011
 				a ^= 0x1b;
 			}
 			// dịch phải b một bit để xử lý bit tiếp theo
@@ -258,7 +265,7 @@ public class AES {
 			for (int i = 0; i < 4; i++) {
 				byte tmp = 0x00;
 				for (int j = 0; j < 4; j++) {
-					// thực hiện phép nhân ma trận với ma trận galois và XOR các kết quả lại với
+					// thực hiện phép nhân ma state trận với ma trận galois và XOR các kết quả lại với
 					// nhau để tạo ra ma trận kết quả MixColumns
 					tmp ^= multiple(galois[i][j], state[j][c]);
 				}
@@ -295,7 +302,7 @@ public class AES {
 		byte[] tmp = new byte[input.length];
 
 		// chuyển đổi mảng byte đầu vào thành ma trận state
-		byte[][] state = new byte[4][Nb];
+		byte[][] state = new byte[Nb][4];
 		for (int i = 0; i < input.length; i++) {
 			state[i % 4][i / 4] = input[i]; // state [i%4] là chỉ mục cột, [i/4] là chỉ mục hàng
 		}
@@ -325,7 +332,7 @@ public class AES {
 	}
 
 	// hàm encrypt để mã hóa dữ liệu
-	public static byte[] encrypt(byte[] in, byte[] key) {
+	public static byte[] encrypt(byte[] input, byte[] key) {
 		Nb = 4; // số cột trong khối dữ liệu state
 		Nk = key.length / 4; // số cột trong khóa bằng độ dài khóa chia 4 (128 bit: 4 bytes,..)
 		Nr = Nk + 6; // số vòng lặp mã hóa sẽ bằng số cột trong khóa + 6
@@ -335,7 +342,7 @@ public class AES {
 		int i;
 
 		// tính toán số byte cần padding để mảng dữ liệu có chiều dài bội số của 16
-		length = 16 - in.length % 16;
+		length = 16 - input.length % 16;
 		padding = new byte[length];
 
 		// thêm padding theo cơ chế PKCS7
@@ -343,20 +350,20 @@ public class AES {
 			padding[i] = (byte) length;
 		}
 
-		byte[] tmp = new byte[in.length + length];
+		byte[] tmp = new byte[input.length + length];
 		byte[] block = new byte[16];
 
 		int count = 0;
 		w = keyExpansion(key); // tạo khóa con từ khóa key
 
 		// Duyệt qua dữ liệu đầu vào và thực hiện mã hóa khối
-		for (i = 0; i < in.length + length; i++) {
+		for (i = 0; i < input.length + length; i++) {
 			if (i > 0 && i % 16 == 0) { // khi đủ 16 byte, thực hiện mã hóa
 				block = encryptBlock(block);
 				System.arraycopy(block, 0, tmp, i - 16, block.length);
 			}
-			if (i < in.length)
-				block[i % 16] = in[i]; // cập nhật block với dữ liệu đầu vào
+			if (i < input.length)
+				block[i % 16] = input[i]; // cập nhật block với dữ liệu đầu vào
 			else {
 				block[i % 16] = padding[count % 16]; // thêm padding vào block
 				count++;
@@ -373,13 +380,14 @@ public class AES {
 	}
 
 	// hàm decryptBlock để giải mã một khối dữ liệu 128 bit
-	public static byte[] decryptBlock(byte[] in) {
-		byte[] tmp = new byte[in.length];
+	public static byte[] decryptBlock(byte[] input) {
+		byte[] tmp = new byte[input.length];
 
 		byte[][] state = new byte[4][Nb];
 
-		for (int i = 0; i < in.length; i++)
-			state[i / 4][i % 4] = in[i % 4 * 4 + i / 4];
+		// chuyển từ mảng 1 chiều thành ma trận state 2 chiều
+		for (int i = 0; i < input.length; i++)
+			state[i / 4][i % 4] = input[i % 4 * 4 + i / 4];
 
 		state = AddRoundKeys(state, w, Nr);
 		for (int round = Nr - 1; round >= 1; round--) {
@@ -399,9 +407,9 @@ public class AES {
 	}
 
 	// hàm decrypt để giải mã dữ liệu
-	public static byte[] decrypt(byte[] in, byte[] key) {
+	public static byte[] decrypt(byte[] input, byte[] key) {
 		int i;
-		byte[] tmp = new byte[in.length];
+		byte[] tmp = new byte[input.length];
 		byte[] block = new byte[16];
 
 		Nb = 4;
@@ -409,13 +417,13 @@ public class AES {
 		Nr = Nk + 6;
 		w = keyExpansion(key);
 
-		for (i = 0; i < in.length; i++) {
+		for (i = 0; i < input.length; i++) {
 			if (i > 0 && i % 16 == 0) {
 				block = decryptBlock(block);
 				System.arraycopy(block, 0, tmp, i - 16, block.length);
 			}
-			if (i < in.length)
-				block[i % 16] = in[i];
+			if (i < input.length)
+				block[i % 16] = input[i];
 		}
 		block = decryptBlock(block);
 		System.arraycopy(block, 0, tmp, i - 16, block.length);
@@ -430,7 +438,7 @@ public class AES {
 	// chuỗi (PKCS7)
 	// dùng để đảm bảo độ dài của chuỗi là bội của 16 byte (block)
 	private static byte[] dltPadding(byte[] input) {
-		// Lấy giá trị của byte cuối cùng, đó chính là số byte padding
+		// lấy giá trị của byte cuối cùng, đó chính là số byte padding
 		int paddingCount = input[input.length - 1];
 
 		// kiểm tra nếu paddingCount hợp lệ (nằm trong khoảng từ 1 đến 16, phù hợp với
