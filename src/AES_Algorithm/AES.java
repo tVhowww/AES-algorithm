@@ -1,7 +1,5 @@
 package AES_Algorithm;
 
-import java.util.Arrays;
-
 public class AES {
 
 	private static int Nb, Nk, Nr;
@@ -49,24 +47,23 @@ public class AES {
 
 	// hàm getSBoxValue để lấy giá trị từ bảng S-box
 	private static byte getSBoxValue(byte num) {
-		// trả về giá trị từ bảng S-box
 		// dùng & 0xff để đảm bảo num là unsigned byte - nằm trong khoảng 0..255
-		return (byte) sbox[num & 0xff];
+		return  (byte) sbox[num & 0xff];
 	}
 
 	// hàm subWord để thay thế các byte trong một từ 4 byte bằng các giá trị tương
 	// ứng từ bảng S-box
 	private static byte[] subWord(byte[] input) {
-		// Tạo một mảng mới để lưu kết quả
+		// tạo một mảng mới để lưu kết quả
 		byte[] result = new byte[input.length];
 
 		for (int i = 0; i < result.length; i++) {
-			// Lấy byte hiện tại
+			// lấy byte hiện tại
 			byte currentByte = input[i];
 
-			// Thay thế byte hiện tại bằng giá trị tương ứng từ bảng S-box
+			// thay thế byte hiện tại bằng giá trị tương ứng từ bảng S-box
 			byte substitutedByte = getSBoxValue(currentByte);
-			// Lưu giá trị đã thay thế vào mảng kết quả
+			// lưu giá trị đã thay thế vào mảng kết quả
 			result[i] = substitutedByte;
 		}
 		return result;
@@ -100,15 +97,18 @@ public class AES {
 				tmp[j] = keyMatrix[i - 1][j];
 			}
 			// kiểm tra xem i có là bội của cho Nk không
+			// trans(w[j - 1]
 			if (i % Nk == 0) {
 				// thực hiện gọi hàm rotWord
 				tmp = rotWord(tmp);
 				// thực hiện gọi hàm subWord
 				tmp = subWord(tmp);
 				// thực hiện XOR với Rcon[i/Nk]
+				// AddRcon
 				tmp[0] = (byte) (tmp[0] ^ (Rcon[i / Nk] & 0xff));
 			}
 			// XOR với subytes trước đó keyMatrix[i-Nk]
+			// AddW
 			for (int j = 0; j < 4; j++) {
 				keyMatrix[i][j] = (byte) (keyMatrix[i - Nk][j] ^ tmp[j]);
 			}
@@ -118,11 +118,11 @@ public class AES {
 
 	}
 
-	// tạo vòng key (input 4 biến 32 bit)
+	// tạo vòng key
 	private static byte[][] AddRoundKeys(byte[][] state, byte[][] subkeys, int round) {
-		// state là mảng sau khi thực hiện MixColumns
-		// subkeys là mảng chứa các khóa con
-		// round là số vòng phải thực hiện
+		// state: là mảng state ban đầu hoặc sau khi thực hiện MixColumns
+		// subkeys: là mảng chứa các khóa con
+		// round: là số vòng phải thực hiện
 		byte[][] tmp = new byte[state.length][state[0].length];
 
 		// duyệt qua từng cột của state
@@ -143,7 +143,7 @@ public class AES {
 
 		for (int row = 0; row < 4; row++) {
 			for (int col = 0; col < Nb; col++) {
-				// thay thế các byte trong state bằng các giá trị tương ứng từ bảng sbox
+				// thay thế các byte trong state bằng các giá trị tương ứng từ bảng S-Box
 				newState[row][col] = getSBoxValue(state[row][col]);
 			}
 		}
@@ -229,11 +229,11 @@ public class AES {
 	public static byte multiple(byte a, byte b) {
 		byte result = 0;
 		for (int i = 0; i < 8; i++) {
-			// Nếu bit thấp nhất của b là 1
+			// nếu bit thấp nhất của b là 1
 			if ((b & 1) == 1) {
 				result ^= a;
 			}
-			// Kiểm tra xem bit cao nhất của a trước khi dịch trái
+			// kiểm tra xem bit cao nhất của a trước khi dịch trái
 			// 0x80 : 10000000
 			boolean highBitSet = (a & 0x80) != 0;
 			// Dịch trái a một bit
@@ -241,13 +241,12 @@ public class AES {
 			// Nếu bit cao nhất của a trước khi dịch trái là 1
 			if (highBitSet) {
 				// Thực hiện phép XOR với 0x1b
-				// 0x1b : 00011011
+				// 0x1b : 00011011, đây là biểu diễn nhị phân của đa thức bất khả quy x^8 + x^4 + x^3 + x + 1
 				a ^= 0x1b;
 			}
-			// Dịch phải b một bit để xử lý bit tiếp theo
+			// dịch phải b một bit để xử lý bit tiếp theo
 			b >>= 1;
 		}
-		// Trả về kết quả cuối cùng
 		return result;
 	}
 
